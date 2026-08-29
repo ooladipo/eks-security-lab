@@ -1,0 +1,4 @@
+EKS Pod Identity Security Lab
+
+This object can only be read by the workload
+that has been explicitly granted access.

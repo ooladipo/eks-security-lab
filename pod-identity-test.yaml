@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: s3-reader-test
+  namespace: network-policy-lab
+spec:
+  serviceAccountName: s3-reader
+  restartPolicy: Never
+  containers:
+    - name: aws-cli
+      image: amazon/aws-cli:latest
+      command:
+        - sleep
+        - "3600"

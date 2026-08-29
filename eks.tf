@@ -35,3 +35,21 @@ resource "aws_eks_cluster" "eks_lab" {
     aws_iam_role_policy_attachment.eks_cluster_policy
   ]
 }
+
+# ==================================================
+# EKS Pod Identity Agent
+# ==================================================
+
+resource "aws_eks_addon" "pod_identity_agent" {
+  cluster_name = aws_eks_cluster.eks_lab.name
+  addon_name   = "eks-pod-identity-agent"
+
+  addon_version = "v1.4.0-eksbuild.1"
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_node_group.eks_lab
+  ]
+}
