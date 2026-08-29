@@ -1,0 +1,28 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+.terraform.tfstate.lock.info
+
+# Terraform variable files
+*.tfvars
+*.tfvars.json
+
+# Sensitive files
+.env
+.env.*
+*.pem
+*.key
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local Kubernetes tools
+kubectl.exe
