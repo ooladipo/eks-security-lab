@@ -17,7 +17,7 @@ resource "aws_eks_cluster" "eks_lab" {
     endpoint_public_access  = true
 
     public_access_cidrs = [
-      "xx.xx.xx.xx/32"
+      "92.119.177.24/32"
     ]
   }
 
