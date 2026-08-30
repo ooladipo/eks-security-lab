@@ -26,3 +26,6 @@ Thumbs.db
 
 # Local Kubernetes tools
 kubectl.exe
+
+# Kubernetes lab secrets
+secrets-demo.yaml
