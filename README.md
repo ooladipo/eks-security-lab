@@ -1,1176 +1,824 @@
-\# EKS Security Lab
+# 🔐 EKS Security Lab
 
+A hands-on AWS EKS security lab focused on implementing and validating **defence-in-depth security controls** across Kubernetes networking, workload identity, authorization, and secrets management.
 
+The goal is to build a realistic EKS environment, deliberately test security boundaries, verify that controls are actually enforced, and document the results.
 
-A hands-on AWS EKS security lab focused on implementing and validating \*\*defence-in-depth security controls\*\* across networking, workload identity, Kubernetes authorization, and secrets management.
+---
 
-
-
-The objective is to build a realistic Kubernetes environment, deliberately test security boundaries, and document the results.
-
-
-
-\---
-
-
-
-\## 🎯 Objectives
-
-
+## 🎯 Objectives
 
 This lab demonstrates practical implementation of:
 
+* AWS VPC and private networking
+* Amazon EKS
+* Managed Kubernetes worker nodes
+* Kubernetes Services
+* AWS Load Balancer exposure
+* Kubernetes NetworkPolicy
+* EKS Pod Identity
+* AWS IAM least privilege
+* Kubernetes RBAC
+* Kubernetes Secrets security
+* Workload-level authorization testing
+* Defence-in-depth security principles
 
+The environment is built incrementally using:
 
-\* AWS VPC security and private networking
+* Terraform
+* AWS CLI
+* Kubernetes manifests
+* kubectl
+* PowerShell
+* Git / GitHub
 
-\* Amazon EKS cluster security
+---
 
-\* Kubernetes workload networking
-
-\* Kubernetes NetworkPolicy
-
-\* AWS Load Balancer exposure
-
-\* EKS Pod Identity
-
-\* AWS IAM least privilege
-
-\* Kubernetes RBAC
-
-\* Kubernetes Secrets security
-
-\* Security testing and authorization validation
-
-\* Defence-in-depth principles
-
-
-
-The lab is built incrementally using \*\*Terraform, Kubernetes manifests, AWS CLI, kubectl, and Git\*\*.
-
-
-
-\---
-
-
-
-\# 🏗️ Architecture
-
-
+# 🏗️ Architecture
 
 ```text
-
-&#x20;                        Internet
-
-&#x20;                           │
-
-&#x20;                           ▼
-
-&#x20;                 AWS Load Balancer
-
-&#x20;                           │
-
-&#x20;                           ▼
-
-&#x20;                ┌────────────────────┐
-
-&#x20;                │    Amazon EKS      │
-
-&#x20;                │                    │
-
-&#x20;                │  Kubernetes API    │
-
-&#x20;                │                    │
-
-&#x20;                │  Private Worker    │
-
-&#x20;                │  Nodes             │
-
-&#x20;                │                    │
-
-&#x20;                │  ┌──────────────┐  │
-
-&#x20;                │  │    Nginx     │  │
-
-&#x20;                │  │    Pods      │  │
-
-&#x20;                │  └──────────────┘  │
-
-&#x20;                │                    │
-
-&#x20;                │  NetworkPolicy     │
-
-&#x20;                │  RBAC              │
-
-&#x20;                │  Pod Identity      │
-
-&#x20;                └────────────────────┘
-
-&#x20;                           │
-
-&#x20;                           ▼
-
-&#x20;                      AWS IAM
-
-&#x20;                           │
-
-&#x20;                           ▼
-
-&#x20;                        Amazon S3
-
+                         Internet
+                            │
+                            ▼
+                  AWS Load Balancer
+                            │
+                            ▼
+                  ┌──────────────────┐
+                  │    Amazon EKS    │
+                  │                  │
+                  │  Kubernetes API  │
+                  │                  │
+                  │  Private Worker  │
+                  │     Nodes        │
+                  │                  │
+                  │  ┌────────────┐  │
+                  │  │   Nginx    │  │
+                  │  │   Pods     │  │
+                  │  └────────────┘  │
+                  │                  │
+                  │ NetworkPolicy    │
+                  │ RBAC             │
+                  │ Pod Identity     │
+                  │ Secrets          │
+                  └──────────────────┘
+                            │
+                            ▼
+                       AWS IAM
+                            │
+                            ▼
+                       Amazon S3
 ```
 
+The EKS worker nodes are deployed into private subnets across multiple Availability Zones.
 
+---
 
-Worker nodes run in \*\*private subnets\*\* across multiple Availability Zones.
+# 🏗️ Infrastructure
 
+## VPC
 
+The lab uses a dedicated VPC containing:
 
-\---
+* Public subnets
+* Private subnets
+* Internet Gateway
+* NAT Gateway
+* Public route tables
+* Private route tables
+* Multi-AZ subnet deployment
 
+Worker nodes run in private subnets and use the NAT Gateway for outbound Internet access.
 
+### Security objective
 
-\# 🔐 Security Controls Implemented
+Reduce direct Internet exposure of Kubernetes worker nodes while maintaining required outbound connectivity.
 
+---
 
+# ☸️ Amazon EKS
 
-\## 1. VPC \& Private EKS Networking
+The lab uses Amazon EKS with Kubernetes:
 
+```text
+Version: 1.36
+```
 
+The cluster includes:
 
-The EKS worker nodes are deployed into private subnets.
+* Managed node group
+* Worker nodes in private subnets
+* Kubernetes API endpoint
+* EKS control-plane logging
 
+Enabled control-plane logs:
 
+* API
+* Audit
+* Authenticator
 
-Implemented infrastructure includes:
+The current lab configuration has both private and public Kubernetes API endpoint access enabled.
 
+---
 
+# 🖥️ Worker Nodes
 
-\* VPC
+The EKS managed node group provides the compute capacity on which Kubernetes workloads run.
 
-\* Public subnets
+Conceptually:
 
-\* Private subnets
+```text
+EKS Control Plane
+       │
+       │ schedules workloads
+       ▼
+┌───────────────────────┐
+│   Worker Node         │
+│                       │
+│  ┌───────┐ ┌───────┐  │
+│  │ Nginx │ │ Nginx │  │
+│  │  Pod  │ │  Pod  │  │
+│  └───────┘ └───────┘  │
+└───────────────────────┘
+```
 
-\* Internet Gateway
+The worker nodes are EC2 instances managed through an EKS managed node group.
 
-\* NAT Gateway
+---
 
-\* Public and private route tables
+# 🌐 Kubernetes Networking
 
-\* Multi-AZ subnet deployment
-
-
-
-\### Security objective
-
-
-
-Prevent worker nodes from requiring direct inbound Internet connectivity while still allowing outbound access through the NAT Gateway.
-
-
-
-\---
-
-
-
-\## 2. Amazon EKS Cluster
-
-
-
-The lab uses Amazon EKS with:
-
-
-
-\* Kubernetes `1.36`
-
-\* Managed node group
-
-\* Worker nodes in private subnets
-
-\* EKS control-plane logging enabled for:
-
-
-
-&#x20; \* API
-
-&#x20; \* Audit
-
-&#x20; \* Authenticator
-
-
-
-The EKS API endpoint currently has both private and public access enabled as part of the lab configuration.
-
-
-
-\---
-
-
-
-\## 3. Nginx Application
-
-
+## Nginx Application
 
 A simple Nginx workload was deployed to validate Kubernetes scheduling and networking.
 
+The application was exposed internally using a Kubernetes `ClusterIP` Service.
 
-
-Two replicas were deployed:
-
-
+Connectivity was verified from another Kubernetes workload using:
 
 ```text
-
-nginx
-
-├── Pod 1
-
-└── Pod 2
-
+curl http://server
 ```
 
+The Nginx application successfully returned an HTTP response.
 
+---
 
-The pods were successfully scheduled across the EKS worker nodes.
+# ⚖️ AWS Load Balancer
 
+The Nginx Service was subsequently exposed using:
 
-
-\---
-
-
-
-\## 4. Kubernetes Services \& AWS Load Balancer
-
-
-
-The Nginx application was initially exposed internally using a `ClusterIP` Service.
-
-
-
-Connectivity was validated from another Kubernetes pod:
-
-
-
-```text
-
-curl http://nginx
-
-```
-
-
-
-The service was subsequently changed to:
-
-
-
-```text
-
+```yaml
 type: LoadBalancer
-
 ```
 
+AWS provisioned an external load balancer for the Kubernetes Service.
 
-
-EKS provisioned an AWS Load Balancer and external HTTP access was successfully validated.
-
-
-
-\### Security concept
-
-
-
-The AWS Load Balancer provides external load balancing.
-
-
-
-Kubernetes Services provide the internal service abstraction and routing to the application's pods.
-
-
-
-\---
-
-
-
-\# 🌐 5. Kubernetes NetworkPolicy
-
-
-
-NetworkPolicy was implemented to control pod-to-pod communication.
-
-
-
-\### Default deny
-
-
-
-A default-deny ingress policy was created:
-
-
+This demonstrated the difference between:
 
 ```text
+ClusterIP
+    │
+    └── Internal Kubernetes access
 
-Client ──────X──────> Server
-
+LoadBalancer
+    │
+    └── External AWS load balancing
 ```
 
+---
 
+# 🌐 Kubernetes NetworkPolicy
 
-The client was unable to connect to the Nginx server and the connection timed out.
+NetworkPolicy was implemented to restrict pod-to-pod communication.
 
+## Default Deny
 
+A default-deny ingress policy was created for the lab namespace.
 
-\### Explicit allow rule
-
-
-
-An allow policy was then created permitting:
-
-
+Before the policy:
 
 ```text
-
-Client ──────HTTP:80──────> Server
-
+Client ────────────────> Server
+          ALLOWED
 ```
 
+After applying the default-deny policy:
 
+```text
+Client ────────X────────> Server
+          DENIED
+```
 
-Connectivity was successfully restored.
+The connection attempt timed out, demonstrating that the NetworkPolicy was being enforced.
 
+## Explicit Allow
 
+A second NetworkPolicy was created to allow the client workload to communicate with the server.
+
+The allowed traffic was:
+
+```text
+Client ───── HTTP:80 ─────> Server
+              │
+              ▼
+           ALLOWED
+```
 
 Testing demonstrated:
 
+| Traffic                 | Result    |
+| ----------------------- | --------- |
+| Client → Server port 80 | ✅ Allowed |
+| Client → Server port 81 | ❌ Denied  |
 
+### Security objective
 
-```text
+NetworkPolicy reduces unnecessary east-west communication and helps limit lateral movement after a workload compromise.
 
-client → server:80     ✅ ALLOWED
+---
 
-client → server:81     ❌ DENIED
-
-```
-
-
-
-\### Security objective
-
-
-
-Limit lateral movement and reduce unnecessary pod-to-pod communication.
-
-
-
-\---
-
-
-
-\# 🔑 6. EKS Pod Identity
-
-
+# 🔑 EKS Pod Identity
 
 EKS Pod Identity was implemented to provide AWS permissions directly to a Kubernetes workload without distributing static AWS credentials.
 
-
-
-Implemented:
-
-
-
-\* EKS Pod Identity Agent
-
-\* Kubernetes ServiceAccount
-
-\* AWS IAM role
-
-\* EKS Pod Identity Association
-
-\* S3 bucket
-
-\* Least-privilege IAM policy
-
-
+The EKS Pod Identity Agent was installed as an EKS add-on.
 
 Architecture:
 
-
-
 ```text
-
 Kubernetes Pod
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 ServiceAccount
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 EKS Pod Identity
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 IAM Role
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 Amazon S3
-
 ```
 
+The workload was associated with the IAM role:
 
+```text
+eks-security-lab-pod-s3-reader
+```
 
 The workload successfully obtained temporary AWS credentials.
 
+The assumed identity was verified using:
 
-
-The identity was verified using:
-
-
-
-```text
-
+```powershell
 aws sts get-caller-identity
-
 ```
 
+---
 
+# 🛡️ IAM Least Privilege
 
-The pod assumed the dedicated IAM role:
+The Pod Identity workload was intentionally given limited S3 permissions.
 
-
-
-```text
-
-eks-security-lab-pod-s3-reader
-
-```
-
-
-
-\---
-
-
-
-\## 🛡️ Pod Identity Least-Privilege Test
-
-
-
-The workload was permitted to read a specific S3 object.
-
-
-
-Test:
-
-
+The workload was permitted to read the test object:
 
 ```text
-
 s3:GetObject
-
 ```
 
-
-
-Result:
-
-
+Testing:
 
 ```text
-
-✅ ALLOWED
-
+Read permitted S3 object
+        ↓
+      ALLOWED
 ```
 
+The workload was not given permission to list all S3 buckets.
 
-
-The workload was not granted permission to list all S3 buckets.
-
-
-
-Test:
-
-
+Testing:
 
 ```text
-
 s3:ListAllMyBuckets
-
+        ↓
+      DENIED
 ```
 
+### Security objective
 
+A compromised workload should receive only the AWS permissions required for its legitimate function.
 
-Result:
+This reduces the potential AWS blast radius of a workload compromise.
 
+---
 
-
-```text
-
-❌ ACCESS DENIED
-
-```
-
-
-
-\### Security objective
-
-
-
-A compromised workload should receive only the AWS permissions it actually requires.
-
-
-
-\---
-
-
-
-\# 👤 7. Kubernetes RBAC
-
-
+# 👤 Kubernetes RBAC
 
 Kubernetes RBAC was implemented to control what workloads can do through the Kubernetes API.
 
-
-
 A dedicated ServiceAccount was created:
 
-
-
 ```text
-
 pod-reader
-
 ```
 
-
-
-A Role was created with only:
-
-
+A namespace-scoped Role was created with the following permissions:
 
 ```text
-
 pods:
-
-&#x20; get
-
-&#x20; list
-
-&#x20; watch
-
+  get
+  list
+  watch
 ```
 
-
-
-A RoleBinding connected the ServiceAccount to the Role.
-
-
+The Role was connected to the ServiceAccount using a RoleBinding.
 
 Architecture:
 
-
-
 ```text
-
 ServiceAccount
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 RoleBinding
-
-&#x20;     │
-
-&#x20;     ▼
-
+      │
+      ▼
 Role
-
-&#x20;     │
-
-&#x20;     ├── get pods
-
-&#x20;     ├── list pods
-
-&#x20;     └── watch pods
-
+      │
+      ├── get pods
+      ├── list pods
+      └── watch pods
 ```
 
+## RBAC Testing
 
+Authorization was explicitly tested using:
 
-\### Authorization testing
+```text
+kubectl auth can-i
+```
 
-
-
-The following tests were performed:
-
-
+Results:
 
 | Action      | Result    |
-
 | ----------- | --------- |
-
 | Get pods    | ✅ Allowed |
-
 | List pods   | ✅ Allowed |
-
 | Watch pods  | ✅ Allowed |
-
+| Create pods | ❌ Denied  |
 | Delete pods | ❌ Denied  |
 
-| Create pods | ❌ Denied  |
+The permissions were also tested from inside a running Kubernetes workload.
 
-
-
-The permissions were also tested \*\*from inside a running Kubernetes pod\*\* using the pod's ServiceAccount identity.
-
-
-
-The workload attempted to delete itself and create another pod.
-
-
-
-Both operations were rejected by the Kubernetes API with:
-
-
+The workload attempted to:
 
 ```text
-
-403 Forbidden
-
+Create another pod
+Delete its own pod
 ```
 
+Both operations were rejected by the Kubernetes API.
 
-
-\### Security objective
-
-
-
-Prevent a compromised workload from gaining unnecessary control over Kubernetes resources.
-
-
-
-\---
-
-
-
-\# 🔐 8. Kubernetes Secrets
-
-
-
-A Kubernetes Secret was created to demonstrate sensitive configuration handling.
-
-
-
-The example Secret contains:
-
-
+Example:
 
 ```text
-
-DB\_USERNAME
-
-DB\_PASSWORD
-
+User "system:serviceaccount:rbac-lab:pod-reader"
+cannot delete resource "pods"
 ```
 
+### Security objective
 
+Prevent a compromised workload from obtaining unnecessary control over Kubernetes resources.
 
-\### Base64 is not encryption
+---
 
+# 🔐 Kubernetes Secrets
 
+A Kubernetes Secret was created to demonstrate sensitive configuration handling and fine-grained access control.
 
-The Secret data was inspected and decoded.
-
-
-
-For example:
-
-
+The test Secret contained application configuration values such as:
 
 ```text
-
-U3VwZXJTZWNyZXQxMjMh
-
+DB_USERNAME
+DB_PASSWORD
 ```
 
+The lab uses non-production test credentials. Sensitive values are intentionally excluded from source control and documentation.
 
+---
 
-decoded to:
+## Base64 Is Not Encryption
 
+The Secret data was inspected and the Base64-encoded value was successfully decoded.
 
+This demonstrated:
 
 ```text
-
-<redacted-test-password>
-
+Base64
+   ≠
+Encryption
 ```
 
+Anyone with sufficient permission to read a Kubernetes Secret can retrieve the encoded data and decode it.
 
+Therefore, simply storing a value inside a Kubernetes Secret does not eliminate the need for strong access controls.
 
-This demonstrates that Base64 provides \*\*encoding, not encryption\*\*.
+---
 
-
-
-\### RBAC protection
-
-
+# 🔐 Fine-Grained Secret RBAC
 
 A dedicated ServiceAccount was created:
 
-
-
 ```text
-
 secret-reader
-
 ```
 
-
-
-Its Role permits:
-
-
+It was bound to a namespace-scoped Role that allows:
 
 ```text
-
 GET app-secret
-
 ```
 
+The Role uses `resourceNames` to restrict access to the specific Secret:
 
+```yaml
+resources:
+  - secrets
 
-but does not permit:
+resourceNames:
+  - app-secret
 
+verbs:
+  - get
+```
 
+This means the workload does not receive broad access to all Secrets.
+
+Conceptually:
 
 ```text
+secret-reader
+      │
+      ├── GET app-secret       ✅
+      ├── GET other Secret    ❌
+      ├── LIST Secrets        ❌
+      └── DELETE app-secret   ❌
+```
 
-GET another-secret
+---
 
-LIST secrets
+# 🧪 Workload-Level Secret Testing
+
+The authorization was tested from inside an actual Kubernetes workload running with the `secret-reader` ServiceAccount.
+
+The workload successfully retrieved the permitted Secret:
+
+```text
+GET app-secret
+     ↓
+   ALLOWED
+```
+
+The workload was unable to:
+
+```text
+GET another Secret
+        ↓
+      DENIED
+
+LIST Secrets
+        ↓
+      DENIED
 
 DELETE app-secret
-
+        ↓
+      DENIED
 ```
 
+The workload successfully retrieved the permitted Secret data through the Kubernetes API and the Base64 value was decoded successfully.
 
+### Security scenario
 
-Testing produced:
-
-
-
-| Action              | Result    |
-
-| ------------------- | --------- |
-
-| Get `app-secret`    | ✅ Allowed |
-
-| Get another Secret  | ❌ Denied  |
-
-| List Secrets        | ❌ Denied  |
-
-| Delete `app-secret` | ❌ Denied  |
-
-
-
-\### Security objective
-
-
-
-Demonstrate that Secret security depends heavily on \*\*authorization and access control\*\*, not simply on the fact that an object is called a Kubernetes Secret.
-
-
-
-\---
-
-
-
-\# 🧪 Security Testing Methodology
-
-
-
-Each security control is validated through an implementation and testing cycle:
-
-
+This simulates a compromised workload:
 
 ```text
+Attacker
+   │
+   ▼
+Compromised Workload
+   │
+   ▼
+ServiceAccount
+   │
+   ▼
+Kubernetes API
+   │
+   ▼
+RBAC
+   │
+   ├── Required Secret → ✅
+   ├── Other Secrets   → ❌
+   ├── Secret Listing   → ❌
+   └── Secret Deletion  → ❌
+```
 
+### Security objective
+
+Limit the blast radius of a compromised workload by restricting access to only the Kubernetes resources and Secrets required by that workload.
+
+---
+
+# ⚠️ Secret Management Considerations
+
+Kubernetes Secret security should consider more than simply creating a `Secret` object.
+
+Important considerations include:
+
+* RBAC
+* Encryption at rest
+* Secret rotation
+* External secret-management systems
+* Avoiding plaintext credentials in Git
+* Avoiding credentials in application manifests
+* Restricting Secret access to required workloads
+* Monitoring access to sensitive resources
+
+The lab Secret manifest containing test credentials is intentionally excluded from Git using `.gitignore`.
+
+---
+
+# 🛡️ Defence-in-Depth
+
+The lab demonstrates multiple independent security layers.
+
+```text
+                         Internet
+                            │
+                            ▼
+                    AWS Load Balancer
+                            │
+                            ▼
+                     Amazon EKS
+                            │
+             ┌──────────────┼──────────────┐
+             │              │              │
+             ▼              ▼              ▼
+       NetworkPolicy       RBAC       Pod Identity
+             │              │              │
+             ▼              ▼              ▼
+        Pod traffic      K8s API        AWS IAM
+                                           │
+                                           ▼
+                                          S3
+```
+
+Each layer answers a different security question.
+
+| Security Control      | Security Question                                   |
+| --------------------- | --------------------------------------------------- |
+| VPC / Private Subnets | Where can infrastructure be reached from?           |
+| Security Groups       | Which network connections are permitted?            |
+| NetworkPolicy         | Which workloads can communicate?                    |
+| Kubernetes RBAC       | What can a workload do inside Kubernetes?           |
+| EKS Pod Identity      | What can a workload do in AWS?                      |
+| IAM Least Privilege   | Which AWS actions/resources are permitted?          |
+| Secrets + RBAC        | Which workloads can access sensitive configuration? |
+
+---
+
+# 🧪 Security Testing Methodology
+
+Each control is implemented and validated using the following process:
+
+```text
 Design
-
-&#x20; ↓
-
+  ↓
 Implement
-
-&#x20; ↓
-
+  ↓
 Deploy
-
-&#x20; ↓
-
+  ↓
 Test expected behaviour
-
-&#x20; ↓
-
+  ↓
 Attempt unauthorized behaviour
-
-&#x20; ↓
-
+  ↓
 Verify enforcement
-
-&#x20; ↓
-
+  ↓
 Document results
-
 ```
 
+The objective is not simply to configure a security control but to provide evidence that the control is actually enforced.
 
+---
 
-This approach ensures that security controls are not simply configured but are \*\*demonstrably enforced\*\*.
+# 💥 Threat Model
 
+The lab assumes that an attacker may eventually compromise a Kubernetes workload.
 
+The security objective is therefore not simply:
 
-\---
+> Prevent every compromise.
 
+Instead, the objective is:
 
+> **Limit what an attacker can do after compromise.**
 
-\# 🛡️ Defence-in-Depth Model
+Examples demonstrated in the lab:
 
-
-
-The lab demonstrates multiple independent security layers:
-
-
+### Network compromise
 
 ```text
-
-&#x20;                   Internet
-
-&#x20;                      │
-
-&#x20;                      ▼
-
-&#x20;             AWS Load Balancer
-
-&#x20;                      │
-
-&#x20;                      ▼
-
-&#x20;             ┌─────────────────┐
-
-&#x20;             │      EKS        │
-
-&#x20;             └─────────────────┘
-
-&#x20;                      │
-
-&#x20;            ┌─────────┼─────────┐
-
-&#x20;            ▼         ▼         ▼
-
-&#x20;      NetworkPolicy   RBAC   Pod Identity
-
-&#x20;            │         │         │
-
-&#x20;            ▼         ▼         ▼
-
-&#x20;       Pod traffic  K8s API    AWS IAM
-
-&#x20;                                 │
-
-&#x20;                                 ▼
-
-&#x20;                                 S3
-
+Compromised Pod
+      │
+      ▼
+NetworkPolicy
+      │
+      └── Unauthorized pod communication → ❌
 ```
 
-
-
-Each control addresses a different threat:
-
-
-
-| Control               | Primary Security Question                  |
-
-| --------------------- | ------------------------------------------ |
-
-| VPC / Private Subnets | Where can infrastructure be reached from?  |
-
-| Security Groups       | Which network connections are permitted?   |
-
-| NetworkPolicy         | Which pods can communicate?                |
-
-| Kubernetes RBAC       | What can a workload do inside Kubernetes?  |
-
-| Pod Identity          | What can a workload do in AWS?             |
-
-| IAM Least Privilege   | Which AWS resources/actions are permitted? |
-
-| Secrets + RBAC        | Who can access sensitive configuration?    |
-
-
-
-\---
-
-
-
-\# 📁 Repository Structure
-
-
+### Kubernetes API compromise
 
 ```text
+Compromised Pod
+      │
+      ▼
+ServiceAccount
+      │
+      ▼
+RBAC
+      │
+      └── Unauthorized Kubernetes actions → ❌
+```
 
+### AWS compromise
+
+```text
+Compromised Pod
+      │
+      ▼
+Pod Identity
+      │
+      ▼
+IAM
+      │
+      └── Unauthorized AWS actions → ❌
+```
+
+### Secret compromise
+
+```text
+Compromised Pod
+      │
+      ▼
+ServiceAccount
+      │
+      ▼
+RBAC
+      │
+      ├── Required Secret → ✅
+      └── Other Secrets   → ❌
+```
+
+This demonstrates **blast-radius reduction through layered least privilege**.
+
+---
+
+# 📁 Repository Structure
+
+```text
 eks-security-lab/
-
 │
-
-├── Terraform
-
-│   ├── eks.tf
-
-│   ├── iam.tf
-
-│   ├── pod-identity.tf
-
-│   └── versions.tf
-
+├── eks.tf
+├── iam.tf
+├── versions.tf
+├── pod-identity.tf
 │
-
-├── Kubernetes
-
-│   ├── nginx.yaml
-
-│   ├── nginx-service.yaml
-
-│   ├── network-policy-deny.yaml
-
-│   ├── network-policy-allow.yaml
-
-│   ├── network-policy-client.yaml
-
-│   ├── network-policy-test.yaml
-
-│   ├── pod-identity-serviceaccount.yaml
-
-│   ├── pod-identity-test.yaml
-
-│   ├── rbac-lab.yaml
-
-│   ├── rbac-serviceaccount.yaml
-
-│   ├── rbac-role.yaml
-
-│   ├── rbac-rolebinding.yaml
-
-│   ├── rbac-test-pod.yaml
-
-│   ├── secrets-lab.yaml
-
-│   ├── secrets-demo.yaml
-
-│   ├── secret-reader-serviceaccount.yaml
-
-│   ├── secret-reader-role.yaml
-
-│   └── secret-reader-rolebinding.yaml
-
+├── network-policy-allow.yaml
+├── network-policy-client.yaml
+├── network-policy-deny.yaml
+├── network-policy-test.yaml
 │
-
+├── pod-identity-serviceaccount.yaml
+├── pod-identity-test.yaml
+│
+├── rbac-lab.yaml
+├── rbac-serviceaccount.yaml
+├── rbac-role.yaml
+├── rbac-rolebinding.yaml
+├── rbac-test-pod.yaml
+│
+├── secrets-lab.yaml
+├── secret-reader-serviceaccount.yaml
+├── secret-reader-role.yaml
+├── secret-reader-rolebinding.yaml
+├── secret-reader-test-pod.yaml
+│
+├── test-object.txt
+├── .gitignore
 └── README.md
-
 ```
 
+The local `secrets-demo.yaml` file contains test credentials and is intentionally excluded from source control.
 
+---
 
-> Note: Secret manifests containing real credentials should never be committed to source control. The credentials used in this lab are intentionally non-production test values.
+# 📌 Git Checkpoints
 
-
-
-\---
-
-
-
-\# 📌 Git Checkpoints
-
-
-
-The project is developed incrementally with Git commits documenting major security milestones.
-
-
+Major security milestones are committed separately to maintain a clear project history.
 
 | Commit    | Milestone                                     |
-
 | --------- | --------------------------------------------- |
-
 | `9423f5f` | Add NAT gateway for private EKS networking    |
-
 | `cf997a2` | Add EKS managed node group                    |
-
 | `d050c4e` | Deploy Nginx application and internal service |
-
 | `2821356` | Expose Nginx using AWS LoadBalancer           |
-
 | `865c366` | Add Kubernetes NetworkPolicy isolation lab    |
-
 | `6d27055` | Implement EKS Pod Identity least privilege    |
-
 | `9a5072d` | Implement Kubernetes RBAC least privilege     |
 
+---
 
+# 🚧 Planned Security Enhancements
 
-\---
-
-
-
-\# 🚧 Planned Security Enhancements
-
-
-
-The lab will continue to evolve with additional security controls and attack scenarios.
-
-
+Future stages of the lab will explore additional EKS security controls and attack scenarios.
 
 Planned areas include:
 
+* EKS API endpoint hardening
+* Kubernetes Secrets hardening
+* Encryption at rest
+* EKS audit logging analysis
+* Security monitoring
+* Security Group analysis
+* Workload compromise simulation
+* Kubernetes privilege escalation scenarios
+* Lateral movement testing
+* Additional IAM hardening
+* Container security
+* Admission control
+* Runtime security
+* Final security architecture review
+* Security control assessment
 
+---
 
-\* EKS API endpoint hardening
+# 🎓 Security Principles Demonstrated
 
-\* Kubernetes Secrets hardening
+## Least Privilege
 
-\* EKS audit logging and security monitoring
+Identities and workloads receive only the permissions required for their function.
 
-\* Security Group analysis
+## Defence in Depth
 
-\* Workload compromise simulation
+Multiple independent security controls reduce reliance on a single defensive layer.
 
-\* Kubernetes privilege escalation scenarios
+## Zero Trust
 
-\* Lateral movement testing
+Workloads are not automatically trusted simply because they are running inside the cluster.
 
-\* Additional IAM hardening
+## Blast Radius Reduction
 
-\* Final security architecture review
+A compromised workload should have limited access to Kubernetes resources, other workloads, AWS services, and sensitive data.
 
-\* Security control matrix and assessment
+## Continuous Validation
 
+Security controls are tested through both permitted and deliberately unauthorized actions.
 
+---
 
-\---
+# 🧰 Technologies
 
+* AWS
+* Amazon EKS
+* Kubernetes
+* Terraform
+* AWS IAM
+* Amazon S3
+* AWS VPC
+* AWS NAT Gateway
+* AWS Load Balancer
+* Kubernetes NetworkPolicy
+* Kubernetes RBAC
+* Kubernetes Secrets
+* PowerShell
+* kubectl
+* AWS CLI
+* Git
+* GitHub
 
+---
 
-\# 🎓 Key Security Principles Demonstrated
+# 🎯 Project Goal
 
+The ultimate goal of this project is to demonstrate how a production-style Amazon EKS environment can be protected using **layered security controls and least-privilege principles**.
 
+Rather than simply deploying infrastructure, the project focuses on:
 
-This lab focuses on practical application of:
+1. Building the environment.
+2. Implementing security controls.
+3. Testing expected behaviour.
+4. Attempting unauthorized actions.
+5. Verifying that security boundaries are enforced.
+6. Documenting the evidence.
+7. Maintaining a reproducible Git history.
 
-
-
-\### Least Privilege
-
-
-
-Give identities and workloads only the permissions they require.
-
-
-
-\### Defence in Depth
-
-
-
-Use multiple independent controls so that failure of one control does not result in complete compromise.
-
-
-
-\### Zero Trust
-
-
-
-Do not automatically trust workloads based on their location within the cluster.
-
-
-
-\### Blast Radius Reduction
-
-
-
-Limit what an attacker can access after compromising a workload.
-
-
-
-\### Continuous Validation
-
-
-
-Security controls should be tested rather than assumed to work.
-
-
-
-\---
-
-
-
-\# 🧰 Technologies
-
-
-
-\* AWS
-
-\* Amazon EKS
-
-\* Kubernetes
-
-\* Terraform
-
-\* AWS IAM
-
-\* Amazon S3
-
-\* AWS VPC
-
-\* AWS NAT Gateway
-
-\* AWS Load Balancer
-
-\* Kubernetes NetworkPolicy
-
-\* Kubernetes RBAC
-
-\* Kubernetes Secrets
-
-\* PowerShell
-
-\* kubectl
-
-\* AWS CLI
-
-\* Git / GitHub
-
-
-
-\---
-
-
-
-\## 🎯 Project Goal
-
-
-
-The ultimate goal of this project is to demonstrate how a production-style EKS environment can be protected using \*\*layered security controls\*\*, while providing reproducible infrastructure and evidence-based security testing.
-
-
-
-This is a hands-on security engineering lab rather than a purely theoretical Kubernetes exercise.
-
-
-
+This makes the project a practical demonstration of **cloud and Kubernetes security engineering**, rather than a purely theoretical Kubernetes exercise.
