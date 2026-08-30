@@ -18,3 +18,8 @@ variable "availability_zones" {
     "eu-west-2b"
   ]
 }
+
+variable "admin_public_ip" {
+  description = "Public IP address allowed to access the EKS API"
+  type        = string
+}

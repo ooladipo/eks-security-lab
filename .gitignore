@@ -29,3 +29,7 @@ kubectl.exe
 
 # Kubernetes lab secrets
 secrets-demo.yaml
+
+# Terraform plan files
+*.tfplan
+tfplan
